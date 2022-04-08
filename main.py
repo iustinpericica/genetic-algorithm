@@ -171,6 +171,7 @@ def chromosomes_crossover(ch1, ch2, breakpoint):
 
 def perform_crossover(population, config):
     result = []
+    history = []
     chr_length = config.chr_len
     for idx in range(0, len(population), 2):
       chr1 = population[idx]
@@ -178,19 +179,19 @@ def perform_crossover(population, config):
       breakpoint = random.randint(1, chr_length - 1)
 
       (new_ch1, new_ch2) = chromosomes_crossover(chr1, chr2, breakpoint)
+      history.append((chr1, chr2, new_ch1, new_ch2, breakpoint))
       result.append(new_ch1)
       result.append(new_ch2)
-    return result
+    return (result, history)
 
 def perform_mutation(population, config):
-    ch_len = config.chr_len
-
+    history = []
     for idx in range(0, len(population)):
         chromosome = population[idx]
         old_chromosome = chromosome[:]
 
         has_mutation = False
-        # 'current chromosome'
+        history_chrz = []
 
         for gene_idx in range(0, len(chromosome)):
             prob_gene = random.uniform(0, 1)
@@ -201,8 +202,10 @@ def perform_mutation(population, config):
 
             old_gene = chromosome[gene_idx]
             chromosome[gene_idx] = 1 - chromosome[gene_idx]
-    
-    return population
+            history_chrz.append((gene_idx, old_gene, chromosome[gene_idx]))
+        history.append((idx, has_mutation, history_chrz, deepcopy(old_chromosome), deepcopy(chromosome)))
+
+    return (population, history)
 
 #### START #####
 
@@ -221,9 +224,10 @@ for i in range(config.nr_of_population):
     selection_intervals = get_selection_intervals(config, population)
     (selected_population, selection_history) = select_from_population(population, selection_intervals)
     (pop_in_crossover, pop_out_crossover, crossover_history) = get_crossover_and_not_crossover_population(selected_population, config)
-    pop_inc_after_cross = perform_crossover(pop_in_crossover, config)
+    (pop_inc_after_cross, after_cross_history) = perform_crossover(pop_in_crossover, config)
     population = pop_inc_after_cross + pop_out_crossover # fresh population after cross
-    population = perform_mutation(population, config)
+    pop_after_cross = deepcopy(population)
+    (population, mutation_history) = perform_mutation(population, config)
     population.append(elitist_chr[1])
 
     if not first_step:
@@ -261,6 +265,49 @@ for i in range(config.nr_of_population):
             out_file.write("\t chromosome {}: {}; prob_chromosome = {} < {} ==> selected\n".format(selection[0], "".join(map(str,selection[1])), selection[2], config.genetics.prob_crossover))
         else:
             out_file.write("\t chromosome {}: {}; prob_chromosome = {}\n".format(selection[0], "".join(map(str,selection[1])), selection[2]))
-
     out_file.write(SECTION_SEPARATOR)
 
+    out_file.write("7.... Crossover: \n")
+    for (index, selection) in enumerate(after_cross_history):
+        out_file.write("\t chromosome: {}\n".format("".join(map(str, selection[0]))))
+        out_file.write("\t chromosome: {}\n".format("".join(map(str, selection[1]))))
+
+        out_file.write("\t -----------------breakpoint: {}\n".format(selection[4]))
+
+        out_file.write("\t \t \t \t {}\n".format("".join(map(str, selection[2]))))
+        out_file.write("\t \t \t \t {}\n".format("".join(map(str, selection[3]))))
+    out_file.write(SECTION_SEPARATOR)
+
+    out_file.write("8.... After Crossover population: \n")
+    print_population(config, pop_after_cross, out_file)
+    out_file.write(SECTION_SEPARATOR)
+
+    out_file.write("9.... Mutation: \n")
+    out_file.write("\t \t Mutation probability: {}\n".format(config.genetics.prob_mutation))
+    for (index, selection) in enumerate(mutation_history):
+        out_file.write("\t Chromosome {}\n".format(selection[0]))
+
+        if selection[1] == True:
+            for gene in selection[2]:
+                out_file.write("\t Gene {} changed: {} -> {}\n".format(gene[0], gene[1], gene[2]))
+            out_file.write("\t final chromosome: {} -> {} \n".format("".join(map(str, selection[3])), "".join(map(str, selection[4]))))
+        else:
+             out_file.write("\t nothing changed\n")
+        out_file.write("\n")
+
+
+    for (index, selection) in enumerate(after_cross_history):
+        out_file.write("\t chromosome: {}\n".format("".join(map(str, selection[0]))))
+        out_file.write("\t chromosome: {}\n".format("".join(map(str, selection[1]))))
+
+        out_file.write("\t -----------------breakpoint: {}\n".format(selection[4]))
+
+        out_file.write("\t \t \t \t {}\n".format("".join(map(str, selection[2]))))
+        out_file.write("\t \t \t \t {}\n".format("".join(map(str, selection[3]))))
+    out_file.write(SECTION_SEPARATOR)
+
+    out_file.write("10.... After Mutating population: \n")
+    print_population(config, population, out_file)
+    out_file.write(SECTION_SEPARATOR)
+
+ 
